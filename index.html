@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#1a1a2e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Lucky Draw</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#1a1a2e;--surface:#16213e;--text:#eaeaea;--text-dim:#7a8ba0;--reward:#4ecdc4;--punish:#ff6b6b;--gold:#f5c518;--radius:12px}
+body{font-family:-apple-system,BlinkMacSystemFont,"Microsoft JhengHei","Segoe UI",sans-serif;background:var(--bg);color:var(--text);min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;align-items:center;overflow:hidden;-webkit-tap-highlight-color:transparent}
+
+/* Mode toggle */
+.mode-toggle{display:flex;margin-top:16px;border-radius:20px;overflow:hidden;border:2px solid rgba(255,255,255,0.1)}
+.mode-btn{padding:10px 24px;font-size:15px;font-weight:600;border:none;cursor:pointer;font-family:inherit;transition:all .2s}
+.mode-btn.reward{background:transparent;color:var(--reward)}
+.mode-btn.reward.active{background:var(--reward);color:#1a1a2e}
+.mode-btn.punish{background:transparent;color:var(--punish)}
+.mode-btn.punish.active{background:var(--punish);color:#1a1a2e}
+
+/* Wheel container */
+.wheel-wrap{position:relative;margin-top:24px;width:300px;height:300px}
+.wheel-canvas{width:300px;height:300px}
+.wheel-pointer{position:absolute;top:-18px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:16px solid transparent;border-right:16px solid transparent;border-top:30px solid var(--gold);filter:drop-shadow(0 2px 4px rgba(0,0,0,0.4));z-index:10}
+.wheel-center{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:50px;height:50px;border-radius:50%;background:var(--gold);display:flex;align-items:center;justify-content:center;font-size:20px;box-shadow:0 2px 8px rgba(0,0,0,0.3);z-index:10;cursor:pointer}
+
+/* Spin button */
+.spin-btn{margin-top:24px;width:200px;height:56px;border-radius:28px;border:none;font-size:22px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s;box-shadow:0 4px 16px rgba(0,0,0,0.3)}
+.spin-btn:active{transform:scale(0.95)}
+.spin-btn.reward-mode{background:linear-gradient(135deg,var(--reward),#2ecc71);color:#1a1a2e}
+.spin-btn.punish-mode{background:linear-gradient(135deg,var(--punish),#e94560);color:#fff}
+.spin-btn:disabled{opacity:0.5;cursor:not-allowed}
+
+/* Result popup */
+.result-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:100;align-items:center;justify-content:center}
+.result-overlay.show{display:flex}
+.result-card{text-align:center;padding:32px 24px;border-radius:20px;max-width:320px;width:90%;animation:popIn .4s ease}
+.result-card.reward{background:linear-gradient(135deg,#16213e,#0f3460);border:2px solid var(--reward)}
+.result-card.punish{background:linear-gradient(135deg,#16213e,#2d1b2e);border:2px solid var(--punish)}
+@keyframes popIn{from{transform:scale(0.5);opacity:0}to{transform:scale(1);opacity:1}}
+.result-emoji{font-size:64px;margin-bottom:12px}
+.result-text{font-size:28px;font-weight:700;margin-bottom:8px;line-height:1.4}
+.result-sub{font-size:14px;color:var(--text-dim);margin-bottom:20px}
+.result-close{padding:10px 32px;border-radius:20px;border:none;font-size:15px;cursor:pointer;font-family:inherit;font-weight:600}
+.result-close.reward{background:var(--reward);color:#1a1a2e}
+.result-close.punish{background:var(--punish);color:#fff}
+
+/* Settings */
+.settings-btn{position:fixed;top:12px;right:12px;background:none;border:none;color:var(--text-dim);font-size:22px;cursor:pointer;padding:8px;border-radius:8px;z-index:50}
+.settings-btn:hover{background:rgba(255,255,255,0.06)}
+
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:200;align-items:flex-end;justify-content:center}
+.modal-overlay.show{display:flex}
+.modal{background:var(--surface);border-radius:16px 16px 0 0;width:100%;max-width:480px;max-height:80vh;padding:20px;overflow-y:auto;animation:slideUp .25s}
+@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+.modal h2{font-size:16px;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.modal h2 .dot{width:10px;height:10px;border-radius:50%}
+.setting-group{margin-bottom:16px}
+.setting-item{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.setting-item input{flex:1;background:var(--bg);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 10px;color:var(--text);font-size:14px;font-family:inherit}
+.setting-item input:focus{outline:none;border-color:var(--gold)}
+.setting-item .del-btn{background:none;border:none;color:var(--text-dim);font-size:18px;cursor:pointer;padding:4px 8px}
+.setting-item .del-btn:hover{color:var(--punish)}
+.add-item-btn{background:rgba(255,255,255,0.06);border:1px dashed rgba(255,255,255,0.15);border-radius:8px;padding:8px;width:100%;color:var(--text-dim);font-size:13px;cursor:pointer;font-family:inherit}
+.add-item-btn:hover{border-color:var(--gold);color:var(--gold)}
+.modal-close{width:100%;padding:12px;border:none;border-radius:8px;background:var(--gold);color:#1a1a2e;font-size:15px;font-weight:600;cursor:pointer;margin-top:12px;font-family:inherit}
+
+/* Confetti */
+.confetti{position:fixed;top:-10px;width:10px;height:10px;z-index:150;pointer-events:none;border-radius:2px}
+@keyframes fall{to{transform:translateY(110vh) rotate(720deg);opacity:0}}
+
+/* Title */
+.title{margin-top:12px;font-size:14px;color:var(--text-dim)}
+</style>
+</head>
+<body>
+
+<button class="settings-btn" id="settingsBtn" title="設定">&#9881;</button>
+
+<div class="mode-toggle">
+  <button class="mode-btn reward active" onclick="setMode('reward')">&#127873; 獎勵</button>
+  <button class="mode-btn punish" onclick="setMode('punish')">&#128520; 處罰</button>
+</div>
+
+<div class="title" id="modeTitle">拉得好！來抽獎吧</div>
+
+<div class="wheel-wrap">
+  <div class="wheel-pointer" id="pointer"></div>
+  <canvas class="wheel-canvas" id="wheelCanvas" width="600" height="600"></canvas>
+  <div class="wheel-center" id="wheelCenter">&#127919;</div>
+</div>
+
+<button class="spin-btn reward-mode" id="spinBtn" onclick="spin()">&#127920; 轉！</button>
+
+<!-- Result -->
+<div class="result-overlay" id="resultOverlay" onclick="closeResult()">
+  <div class="result-card" id="resultCard">
+    <div class="result-emoji" id="resultEmoji"></div>
+    <div class="result-text" id="resultText"></div>
+    <div class="result-sub" id="resultSub"></div>
+    <button class="result-close" id="resultClose" onclick="closeResult()">OK!</button>
+  </div>
+</div>
+
+<!-- Settings modal -->
+<div class="modal-overlay" id="settingsModal">
+  <div class="modal">
+    <h2><span class="dot" style="background:var(--reward)"></span>獎勵項目</h2>
+    <div class="setting-group" id="rewardList"></div>
+    <button class="add-item-btn" onclick="addSettingItem('reward')">+ 新增獎勵</button>
+
+    <h2 style="margin-top:20px"><span class="dot" style="background:var(--punish)"></span>處罰項目</h2>
+    <div class="setting-group" id="punishList"></div>
+    <button class="add-item-btn" onclick="addSettingItem('punish')">+ 新增處罰</button>
+
+    <button class="modal-close" onclick="saveSettings()">儲存</button>
+  </div>
+</div>
+
+<script>
+// ─── Data ───
+const DEFAULT_REWARDS = [
+  { text: '一顆糖果', emoji: '🍬' },
+  { text: '兩顆糖果', emoji: '🍭' },
+  { text: '老師做10下伏地挺身', emoji: '💪' },
+  { text: '老師做20秒棒式', emoji: '🏋️' },
+  { text: '老師學動物叫', emoji: '🐔' },
+  { text: '選一首喜歡的曲子', emoji: '🎵' },
+];
+
+const DEFAULT_PUNISHES = [
+  { text: '空弦拉10遍', emoji: '🎻' },
+  { text: '夾琴金雞獨立20秒', emoji: '🦩' },
+  { text: '音階來回3遍', emoji: '🎼' },
+  { text: '節拍器加快10', emoji: '⏱️' },
+  { text: '困難小節重複5遍', emoji: '🔁' },
+  { text: '閉眼拉一段', emoji: '😵' },
+];
+
+let rewards = [];
+let punishes = [];
+let currentMode = 'reward';
+let spinning = false;
+let wheelAngle = 0;
+
+function loadData() {
+  const saved = localStorage.getItem('lucky-draw-data');
+  if (saved) {
+    try {
+      const d = JSON.parse(saved);
+      rewards = d.rewards || DEFAULT_REWARDS.slice();
+      punishes = d.punishes || DEFAULT_PUNISHES.slice();
+    } catch { resetData(); }
+  } else { resetData(); }
+}
+
+function resetData() {
+  rewards = DEFAULT_REWARDS.slice();
+  punishes = DEFAULT_PUNISHES.slice();
+}
+
+function saveData() {
+  localStorage.setItem('lucky-draw-data', JSON.stringify({ rewards, punishes }));
+}
+
+// ─── Mode ───
+function setMode(mode) {
+  currentMode = mode;
+  document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+  document.querySelector(`.mode-btn.${mode}`).classList.add('active');
+  const btn = document.getElementById('spinBtn');
+  btn.className = `spin-btn ${mode}-mode`;
+  document.getElementById('modeTitle').textContent =
+    mode === 'reward' ? '拉得好！來抽獎吧' : '來接受小小的挑戰吧';
+  document.getElementById('pointer').style.borderTopColor =
+    mode === 'reward' ? 'var(--gold)' : 'var(--punish)';
+  drawWheel();
+}
+
+// ─── Wheel Drawing ───
+function getItems() {
+  return currentMode === 'reward' ? rewards : punishes;
+}
+
+function drawWheel() {
+  const canvas = document.getElementById('wheelCanvas');
+  const ctx = canvas.getContext('2d');
+  const items = getItems();
+  const n = items.length;
+  if (n === 0) return;
+
+  const cx = 300, cy = 300, r = 280;
+  const arc = (Math.PI * 2) / n;
+  const colors = currentMode === 'reward'
+    ? ['#0f3460', '#16213e', '#1a3a5c', '#132a46', '#1e4070', '#112244']
+    : ['#2d1b2e', '#3a1c2e', '#4a1c3e', '#2a1a2a', '#3c2040', '#331a2e'];
+
+  ctx.clearRect(0, 0, 600, 600);
+
+  for (let i = 0; i < n; i++) {
+    const startAngle = wheelAngle + i * arc - Math.PI / 2;
+    const endAngle = startAngle + arc;
+
+    // Slice
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, r, startAngle, endAngle);
+    ctx.closePath();
+    ctx.fillStyle = colors[i % colors.length];
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Text
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(startAngle + arc / 2);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = currentMode === 'reward' ? '#4ecdc4' : '#ff6b6b';
+    ctx.font = '24px sans-serif';
+    ctx.fillText(items[i].emoji, r * 0.55, 6);
+    ctx.fillStyle = '#eaeaea';
+    ctx.font = '14px "Microsoft JhengHei", sans-serif';
+    // Wrap long text
+    const txt = items[i].text;
+    if (txt.length > 6) {
+      ctx.font = '12px "Microsoft JhengHei", sans-serif';
+      ctx.fillText(txt.slice(0, 6), r * 0.75, 4);
+      ctx.fillText(txt.slice(6), r * 0.75, 18);
+    } else {
+      ctx.fillText(txt, r * 0.75, 6);
+    }
+    ctx.restore();
+  }
+
+  // Outer ring
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.strokeStyle = currentMode === 'reward' ? 'rgba(78,205,196,0.3)' : 'rgba(255,107,107,0.3)';
+  ctx.lineWidth = 4;
+  ctx.stroke();
+}
+
+// ─── Spin ───
+function spin() {
+  if (spinning) return;
+  const items = getItems();
+  if (items.length === 0) return;
+
+  spinning = true;
+  document.getElementById('spinBtn').disabled = true;
+
+  const n = items.length;
+  const arc = (Math.PI * 2) / n;
+  // Pick random winner
+  const winIdx = Math.floor(Math.random() * n);
+  // Calculate target angle: spin 5-8 full turns + land on winner
+  const extraTurns = (5 + Math.random() * 3) * Math.PI * 2;
+  // Winner should be at top (pointer at -PI/2), center of slice
+  const targetAngle = -winIdx * arc - arc / 2 + Math.PI / 2;
+  const totalSpin = extraTurns + targetAngle - (wheelAngle % (Math.PI * 2));
+
+  const startAngle = wheelAngle;
+  const startTime = performance.now();
+  const duration = 3000 + Math.random() * 1500;
+
+  function easeOutCubic(t) {
+    return 1 - Math.pow(1 - t, 3);
+  }
+
+  function animate(now) {
+    const elapsed = now - startTime;
+    const progress = Math.min(elapsed / duration, 1);
+    const eased = easeOutCubic(progress);
+
+    wheelAngle = startAngle + totalSpin * eased;
+    drawWheel();
+
+    if (progress < 1) {
+      requestAnimationFrame(animate);
+    } else {
+      spinning = false;
+      document.getElementById('spinBtn').disabled = false;
+      showResult(items[winIdx]);
+    }
+  }
+
+  requestAnimationFrame(animate);
+}
+
+// ─── Result ───
+function showResult(item) {
+  const overlay = document.getElementById('resultOverlay');
+  const card = document.getElementById('resultCard');
+  const isReward = currentMode === 'reward';
+
+  card.className = `result-card ${currentMode}`;
+  document.getElementById('resultEmoji').textContent = item.emoji;
+  document.getElementById('resultText').textContent = item.text;
+  document.getElementById('resultSub').textContent =
+    isReward ? '恭喜！你贏得了獎勵！' : '加油！接受挑戰吧！';
+  const closeBtn = document.getElementById('resultClose');
+  closeBtn.className = `result-close ${currentMode}`;
+  closeBtn.textContent = isReward ? '太棒了！' : '我接受！';
+
+  overlay.classList.add('show');
+
+  if (isReward) spawnConfetti();
+}
+
+function closeResult() {
+  document.getElementById('resultOverlay').classList.remove('show');
+}
+
+// ─── Confetti ───
+function spawnConfetti() {
+  const colors = ['#4ecdc4', '#f5c518', '#ff6b6b', '#a29bfe', '#55efc4', '#fd79a8', '#fdcb6e'];
+  for (let i = 0; i < 40; i++) {
+    const el = document.createElement('div');
+    el.className = 'confetti';
+    el.style.left = Math.random() * 100 + 'vw';
+    el.style.background = colors[Math.floor(Math.random() * colors.length)];
+    el.style.width = (6 + Math.random() * 8) + 'px';
+    el.style.height = (6 + Math.random() * 8) + 'px';
+    el.style.animation = `fall ${1.5 + Math.random() * 2}s linear forwards`;
+    el.style.animationDelay = Math.random() * 0.5 + 's';
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 4000);
+  }
+}
+
+// ─── Settings ───
+document.getElementById('settingsBtn').addEventListener('click', () => {
+  renderSettings();
+  document.getElementById('settingsModal').classList.add('show');
+});
+
+function renderSettings() {
+  renderSettingGroup('rewardList', rewards);
+  renderSettingGroup('punishList', punishes);
+}
+
+function renderSettingGroup(containerId, items) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = items.map((item, i) => `
+    <div class="setting-item">
+      <input value="${escAttr(item.emoji)}" style="width:44px;text-align:center;flex:none" data-group="${containerId}" data-idx="${i}" data-field="emoji">
+      <input value="${escAttr(item.text)}" data-group="${containerId}" data-idx="${i}" data-field="text">
+      <button class="del-btn" onclick="deleteSettingItem('${containerId}',${i})">&times;</button>
+    </div>
+  `).join('');
+}
+
+function addSettingItem(mode) {
+  const list = mode === 'reward' ? rewards : punishes;
+  list.push({ text: '', emoji: mode === 'reward' ? '🎁' : '📝' });
+  renderSettings();
+  // Focus the new input
+  const containerId = mode === 'reward' ? 'rewardList' : 'punishList';
+  const inputs = document.getElementById(containerId).querySelectorAll('input[data-field="text"]');
+  if (inputs.length) inputs[inputs.length - 1].focus();
+}
+
+function deleteSettingItem(containerId, idx) {
+  const list = containerId === 'rewardList' ? rewards : punishes;
+  list.splice(idx, 1);
+  renderSettings();
+}
+
+function saveSettings() {
+  // Read all inputs
+  document.querySelectorAll('.setting-item input').forEach(input => {
+    const group = input.dataset.group;
+    const idx = parseInt(input.dataset.idx);
+    const field = input.dataset.field;
+    const list = group === 'rewardList' ? rewards : punishes;
+    if (list[idx]) list[idx][field] = input.value;
+  });
+  // Remove empty items
+  rewards = rewards.filter(i => i.text.trim());
+  punishes = punishes.filter(i => i.text.trim());
+  saveData();
+  document.getElementById('settingsModal').classList.remove('show');
+  drawWheel();
+}
+
+document.getElementById('settingsModal').addEventListener('click', e => {
+  if (e.target === document.getElementById('settingsModal')) saveSettings();
+});
+
+function escAttr(s) { return s.replace(/"/g, '&quot;'); }
+
+// ─── Init ───
+loadData();
+drawWheel();
+
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+</script>
+</body>
+</html>
