@@ -1,4 +1,4 @@
-const CACHE = 'lucky-draw-v1';
+const CACHE = 'lucky-draw-v2';
 const ASSETS = ['./', 'index.html', 'manifest.json'];
 
 self.addEventListener('install', e => {

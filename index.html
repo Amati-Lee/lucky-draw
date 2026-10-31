@@ -21,6 +21,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Microsoft JhengHei","Segoe UI
 .mode-btn.reward.active{background:var(--reward);color:#1a1a2e}
 .mode-btn.punish{background:transparent;color:var(--punish)}
 .mode-btn.punish.active{background:var(--punish);color:#1a1a2e}
+.mode-btn:disabled,.settings-btn:disabled{opacity:.45;cursor:not-allowed}
 
 /* Wheel container */
 .wheel-wrap{position:relative;margin-top:24px;width:300px;height:300px}
@@ -169,6 +170,7 @@ function saveData() {
 
 // ─── Mode ───
 function setMode(mode) {
+  if (spinning) return;   // 轉動中換模式會讓底圖換成另一組項目，顯示框卻還是舊的那組
   currentMode = mode;
   document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
   document.querySelector(`.mode-btn.${mode}`).classList.add('active');
@@ -247,23 +249,34 @@ function drawWheel() {
 }
 
 // ─── Spin ───
+// 轉動期間連「模式」和「設定」一起鎖住：底圖換了項目而顯示框沿用舊清單就會對不上
+function setControlsDisabled(d) {
+  document.getElementById('spinBtn').disabled = d;
+  document.getElementById('settingsBtn').disabled = d;
+  document.querySelectorAll('.mode-btn').forEach(b => b.disabled = d);
+}
+
 function spin() {
   if (spinning) return;
   const items = getItems();
   if (items.length === 0) return;
 
   spinning = true;
-  document.getElementById('spinBtn').disabled = true;
+  setControlsDisabled(true);
 
   const n = items.length;
-  const arc = (Math.PI * 2) / n;
+  const TAU = Math.PI * 2;
+  const arc = TAU / n;
   // Pick random winner
   const winIdx = Math.floor(Math.random() * n);
-  // Calculate target angle: spin 5-8 full turns + land on winner
-  const extraTurns = (5 + Math.random() * 3) * Math.PI * 2;
-  // Winner should be at top (pointer at -PI/2), center of slice
-  const targetAngle = -winIdx * arc - arc / 2 + Math.PI / 2;
-  const totalSpin = extraTurns + targetAngle - (wheelAngle % (Math.PI * 2));
+  // drawWheel 把第 i 格的中心畫在 wheelAngle + (i+0.5)*arc - PI/2，
+  // 指針在正上方 (-PI/2)，所以中獎格對準指針的條件是 wheelAngle ≡ -(winIdx+0.5)*arc
+  const target = -(winIdx + 0.5) * arc;
+  const current = ((wheelAngle % TAU) + TAU) % TAU;
+  // 往前轉到目標角度還差多少（0 ~ 2PI），再加「整數圈」——
+  // 圈數必須是整數，否則最終落點會被零點幾圈推掉，顯示框就跟底圖不一致
+  const delta = (((target - current) % TAU) + TAU) % TAU;
+  const totalSpin = (5 + Math.floor(Math.random() * 4)) * TAU + delta;
 
   const startAngle = wheelAngle;
   const startTime = performance.now();
@@ -284,8 +297,11 @@ function spin() {
     if (progress < 1) {
       requestAnimationFrame(animate);
     } else {
+      // 收尾時把角度歸到目標值本身：既避開累加的浮點誤差，也讓角度不會無限增長
+      wheelAngle = ((target % TAU) + TAU) % TAU;
+      drawWheel();
       spinning = false;
-      document.getElementById('spinBtn').disabled = false;
+      setControlsDisabled(false);
       showResult(items[winIdx]);
     }
   }
@@ -336,6 +352,7 @@ function spawnConfetti() {
 
 // ─── Settings ───
 document.getElementById('settingsBtn').addEventListener('click', () => {
+  if (spinning) return;
   renderSettings();
   document.getElementById('settingsModal').classList.add('show');
 });
