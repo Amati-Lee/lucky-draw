@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#1a1a2e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<script src="wheel.js"></script>
+<title>抽學生</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#1a1a2e;--surface:#16213e;--text:#eaeaea;--text-dim:#7a8ba0;--accent:#f5c518;--pick:#4ecdc4;--danger:#ff6b6b;--radius:12px}
+body{font-family:-apple-system,BlinkMacSystemFont,"Microsoft JhengHei","Segoe UI",sans-serif;background:var(--bg);color:var(--text);min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;align-items:center;-webkit-tap-highlight-color:transparent}
+
+.nav-link{position:fixed;top:12px;left:12px;color:var(--text-dim);font-size:14px;text-decoration:none;padding:8px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);z-index:50}
+.nav-link:hover{background:rgba(255,255,255,0.06);color:var(--text)}
+.settings-btn{position:fixed;top:12px;right:12px;background:none;border:none;color:var(--text-dim);font-size:22px;cursor:pointer;padding:8px;border-radius:8px;z-index:50}
+.settings-btn:hover{background:rgba(255,255,255,0.06)}
+.settings-btn:disabled,.class-select:disabled{opacity:.45;cursor:not-allowed}
+
+.topbar{margin-top:56px;display:flex;align-items:center;gap:10px}
+.class-select{background:var(--surface);border:1px solid rgba(255,255,255,0.12);border-radius:20px;padding:8px 14px;color:var(--text);font-size:15px;font-family:inherit;cursor:pointer;max-width:70vw}
+.class-select:focus{outline:none;border-color:var(--accent)}
+
+/* 舞台：≤12 人用轉盤，超過用名字快閃 */
+.stage{margin-top:20px;width:300px;height:300px;display:flex;align-items:center;justify-content:center;position:relative}
+.wheel-pointer{position:absolute;top:-16px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:12px solid transparent;border-right:12px solid transparent;border-top:26px solid var(--accent);filter:drop-shadow(0 2px 4px rgba(0,0,0,.4));z-index:10}
+.wheel-center{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:46px;height:46px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:20px;box-shadow:0 2px 8px rgba(0,0,0,.3);z-index:10}
+.flash-box{width:300px;min-height:150px;border-radius:20px;background:linear-gradient(135deg,var(--surface),#0f3460);border:2px solid rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;padding:16px}
+.flash-name{font-size:46px;font-weight:700;letter-spacing:2px;line-height:1.2;text-align:center;word-break:break-all}
+.flash-name.idle{font-size:20px;color:var(--text-dim);font-weight:400;letter-spacing:0}
+
+.counter{margin-top:18px;font-size:15px;color:var(--text-dim)}
+.counter b{color:var(--pick);font-size:20px}
+.draw-btn{margin-top:14px;width:220px;height:58px;border-radius:29px;border:none;font-size:23px;font-weight:700;cursor:pointer;font-family:inherit;background:linear-gradient(135deg,var(--pick),#2ecc71);color:#1a1a2e;box-shadow:0 4px 16px rgba(0,0,0,.3)}
+.draw-btn:active{transform:scale(.95)}
+.draw-btn:disabled{opacity:.5;cursor:not-allowed}
+.draw-btn.restart{background:linear-gradient(135deg,var(--accent),#f39c12)}
+.reset-link{margin-top:10px;background:none;border:none;color:var(--text-dim);font-size:13px;cursor:pointer;font-family:inherit;text-decoration:underline}
+
+/* 名單一覽 */
+.roster{margin:16px 12px 40px;max-width:520px;display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
+.chip{font-size:13px;padding:5px 10px;border-radius:14px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08)}
+.chip.done{color:var(--text-dim);text-decoration:line-through;opacity:.55;cursor:pointer}
+.chip.done:hover{border-color:var(--accent);color:var(--accent)}
+.roster-hint{width:100%;text-align:center;font-size:12px;color:var(--text-dim);margin-top:4px}
+
+/* 抽中結果 */
+.result-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:100;align-items:center;justify-content:center}
+.result-overlay.show{display:flex}
+.result-card{text-align:center;padding:36px 28px;border-radius:20px;max-width:340px;width:90%;background:linear-gradient(135deg,#16213e,#0f3460);border:2px solid var(--pick);animation:popIn .4s ease}
+@keyframes popIn{from{transform:scale(.5);opacity:0}to{transform:scale(1);opacity:1}}
+.result-label{font-size:14px;color:var(--text-dim);margin-bottom:10px}
+.result-name{font-size:44px;font-weight:700;line-height:1.3;margin-bottom:18px;word-break:break-all}
+.result-close{padding:10px 32px;border-radius:20px;border:none;font-size:15px;cursor:pointer;font-family:inherit;font-weight:600;background:var(--pick);color:#1a1a2e}
+
+/* 設定 */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;align-items:flex-end;justify-content:center}
+.modal-overlay.show{display:flex}
+.modal{background:var(--surface);border-radius:16px 16px 0 0;width:100%;max-width:520px;max-height:88vh;padding:20px;overflow-y:auto;animation:slideUp .25s}
+@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+.modal h2{font-size:16px;margin-bottom:10px}
+.row{display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
+.modal input[type=text],.modal select{flex:1;min-width:120px;background:var(--bg);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:9px 10px;color:var(--text);font-size:14px;font-family:inherit}
+.modal textarea{width:100%;height:210px;background:var(--bg);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:10px;color:var(--text);font-size:15px;font-family:inherit;line-height:1.7;resize:vertical}
+.modal input:focus,.modal textarea:focus,.modal select:focus{outline:none;border-color:var(--accent)}
+.hint{font-size:12px;color:var(--text-dim);line-height:1.7;margin:8px 0 10px}
+.hint code{background:rgba(255,255,255,.07);padding:1px 5px;border-radius:4px}
+.btn{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:9px 14px;color:var(--text);font-size:13px;cursor:pointer;font-family:inherit}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.danger:hover{border-color:var(--danger);color:var(--danger)}
+.modal-close{width:100%;padding:13px;border:none;border-radius:8px;background:var(--accent);color:#1a1a2e;font-size:15px;font-weight:600;cursor:pointer;margin-top:14px;font-family:inherit}
+.count-badge{font-size:12px;color:var(--text-dim)}
+</style>
+</head>
+<body>
+
+<a class="nav-link" href="index.html">&#8592; &#127873; 抽獎轉盤</a>
+<button class="settings-btn" id="settingsBtn" title="名單設定">&#9881;</button>
+
+<div class="topbar">
+  <select class="class-select" id="classSelect" onchange="switchClass(this.selectedIndex)"></select>
+</div>
+
+<div class="stage" id="stage"></div>
+
+<div class="counter" id="counter"></div>
+<button class="draw-btn" id="drawBtn" onclick="draw()">&#127919; 抽！</button>
+<button class="reset-link" id="resetLink" onclick="resetRound()">重新開始這一輪</button>
+
+<div class="roster" id="roster"></div>
+
+<!-- 抽中 -->
+<div class="result-overlay" id="resultOverlay" onclick="closeResult()">
+  <div class="result-card">
+    <div class="result-label" id="resultLabel">抽到的是</div>
+    <div class="result-name" id="resultName"></div>
+    <button class="result-close" onclick="closeResult()">好！</button>
+  </div>
+</div>
+
+<!-- 設定 -->
+<div class="modal-overlay" id="settingsModal">
+  <div class="modal">
+    <h2>班級</h2>
+    <div class="row">
+      <select id="editClassSelect" onchange="editSwitch(this.selectedIndex)"></select>
+      <button class="btn" onclick="addClass()">+ 新增班級</button>
+      <button class="btn danger" onclick="removeClass()">刪除這班</button>
+    </div>
+    <div class="row">
+      <input type="text" id="className" placeholder="班級名稱，例如：週三初級班">
+    </div>
+
+    <h2>名單 <span class="count-badge" id="parseCount"></span></h2>
+    <textarea id="rosterText" placeholder="一行一個名字&#10;陳小明&#10;林佳穎&#10;王怡君"></textarea>
+    <div class="hint">
+      可以直接從 Excel／Google 試算表選一整欄 <code>Ctrl+C</code>，在這裡 <code>Ctrl+V</code>。<br>
+      座號會自動去掉（<code>1 陳小明</code>、<code>1.陳小明</code>、<code>1,陳小明</code> 都只留名字）。
+    </div>
+    <div class="row">
+      <button class="btn" onclick="document.getElementById('fileInput').click()">從 .txt / .csv 匯入</button>
+      <input type="file" id="fileInput" accept=".txt,.csv" style="display:none">
+      <button class="btn" onclick="exportRoster()">匯出名單</button>
+    </div>
+
+    <button class="modal-close" onclick="saveSettings()">儲存</button>
+  </div>
+</div>
+
+<script>
+// ─── 資料 ───
+const STORE_KEY = 'lucky-draw-roster';
+const WHEEL_MAX = 12;   // 全班人數 ≤ 這個值就用轉盤；超過用名字快閃
+                        // 依據：300px 轉盤在 13 人以上時，指針寬度會蓋到超過半格，看不出指到誰
+                        // ⛔ 判準是「全班總人數」不是「剩餘人數」：整輪的呈現方式要固定，
+                        //    否則 30 人班抽到剩 12 人時介面會當場換樣，上課中很突兀
+const COLORS = ['#0f3460', '#16213e', '#1a3a5c', '#132a46', '#1e4070', '#112244'];
+
+let data = { classes: [], current: 0 };
+let editIdx = 0;          // 設定視窗目前在編哪一班
+let drawing = false;
+let wheelAngle = 0;
+
+function load() {
+  try {
+    const d = JSON.parse(localStorage.getItem(STORE_KEY));
+    if (d && Array.isArray(d.classes) && d.classes.length) {
+      data = d;
+      data.classes.forEach(c => { c.students = c.students || []; c.drawn = c.drawn || []; });
+      data.current = Math.min(data.current || 0, data.classes.length - 1);
+      return;
+    }
+  } catch {}
+  data = { classes: [{ name: '我的班級', students: [], drawn: [] }], current: 0 };
+}
+function save() { localStorage.setItem(STORE_KEY, JSON.stringify(data)); }
+
+const cls = () => data.classes[data.current];
+const remaining = () => cls().students.map((_, i) => i).filter(i => !cls().drawn.includes(i));
+// 呈現方式只看全班人數 → 一輪之內不會變
+const useWheel = () => cls().students.length > 0 && cls().students.length <= WHEEL_MAX;
+
+// ─── 名單解析：支援從 Excel 貼上 ───
+// 一行一人；行內若有 Tab／逗號分隔，丟掉純數字的欄（座號），取第一個非數字欄
+function parseRoster(text) {
+  return text.split(/\r?\n/).map(line => {
+    const fields = line.split(/[\t,，;；]/).map(s => s.trim()).filter(Boolean);
+    if (!fields.length) return '';
+    const named = fields.filter(f => !/^\d+$/.test(f));
+    let name = named.length ? named[0] : '';
+    if (fields.length <= 1) name = name.replace(/^\d+\s*[.、．)）：:\-\s]\s*/, '').trim();
+    return name;
+  }).filter(Boolean);
+}
+
+// ─── 畫面 ───
+function renderStage() {
+  const stage = document.getElementById('stage');
+  const rem = remaining();
+  if (rem.length && useWheel()) {
+    if (!document.getElementById('wheelCanvas')) {
+      stage.innerHTML = '<div class="wheel-pointer"></div>'
+        + '<canvas id="wheelCanvas" width="600" height="600" style="width:300px;height:300px"></canvas>'
+        + '<div class="wheel-center">&#127919;</div>';
+    }
+    drawWheelNow(rem);
+  } else {
+    const n = cls().students.length;
+    const msg = n === 0 ? '還沒有名單<br>按右上角 ⚙ 貼上班級名單'
+      : rem.length === 0 ? '這一輪全部抽完了 &#127881;'
+      : '準備好了<br>按「抽！」';
+    stage.innerHTML = `<div class="flash-box"><div class="flash-name idle" id="flashName">${msg}</div></div>`;
+  }
+}
+
+function drawWheelNow(rem) {
+  const canvas = document.getElementById('wheelCanvas');
+  if (!canvas) return;
+  renderWheel(canvas.getContext('2d'), {
+    items: rem.map(i => ({ text: cls().students[i] })),
+    angle: wheelAngle,
+    size: 600, radius: 280,
+    colors: COLORS,
+    ring: 'rgba(245,197,24,0.35)',
+    fontSize: 18, smallFontSize: 14, wrapAt: 5,
+  });
+}
+
+function renderStatus() {
+  const total = cls().students.length;
+  const rem = remaining().length;
+  document.getElementById('counter').innerHTML =
+    total === 0 ? '　' : `還剩 <b>${rem}</b> / ${total} 人`;
+
+  const btn = document.getElementById('drawBtn');
+  const done = total > 0 && rem === 0;
+  btn.classList.toggle('restart', done);
+  btn.innerHTML = done ? '&#128260; 再來一輪' : '&#127919; 抽！';
+  btn.disabled = total === 0 || drawing;
+  document.getElementById('resetLink').style.visibility =
+    (total > 0 && cls().drawn.length > 0 && !done) ? 'visible' : 'hidden';
+}
+
+function renderRoster() {
+  const el = document.getElementById('roster');
+  const s = cls().students;
+  if (!s.length) { el.innerHTML = ''; return; }
+  el.innerHTML = s.map((name, i) => {
+    const done = cls().drawn.includes(i);
+    return `<span class="chip${done ? ' done' : ''}"${done ? ` onclick="putBack(${i})" title="點一下放回"` : ''}>${esc(name)}</span>`;
+  }).join('') + (cls().drawn.length ? '<div class="roster-hint">點劃掉的名字可以放回（學生請假、抽錯時用）</div>' : '');
+}
+
+function renderClassSelect() {
+  const sel = document.getElementById('classSelect');
+  sel.innerHTML = data.classes.map((c, i) =>
+    `<option${i === data.current ? ' selected' : ''}>${esc(c.name)}（${c.students.length} 人）</option>`).join('');
+  sel.style.visibility = data.classes.length > 1 ? 'visible' : 'hidden';
+}
+
+function renderAll() { renderClassSelect(); renderStage(); renderStatus(); renderRoster(); }
+
+function switchClass(i) {
+  if (drawing) return;
+  data.current = i; wheelAngle = 0; save(); renderAll();
+}
+
+// ─── 抽 ───
+function setControls(disabled) {
+  document.getElementById('drawBtn').disabled = disabled;
+  document.getElementById('settingsBtn').disabled = disabled;
+  document.getElementById('classSelect').disabled = disabled;
+  document.getElementById('resetLink').disabled = disabled;
+}
+
+function draw() {
+  if (drawing) return;
+  const total = cls().students.length;
+  if (total === 0) { openSettings(); return; }
+  const rem = remaining();
+  if (rem.length === 0) { resetRound(); return; }   // 抽完了 → 這顆鈕變成「再來一輪」
+
+  const pick = rem[Math.floor(Math.random() * rem.length)];
+  drawing = true; setControls(true);
+
+  if (useWheel()) spinWheel(rem, rem.indexOf(pick), () => finish(pick));
+  else flashNames(rem, pick, () => finish(pick));
+}
+
+// 轉盤（全班 ≤ WHEEL_MAX 人）
+function spinWheel(rem, winPos, done) {
+  const { target, totalSpin } = planSpin(wheelAngle, rem.length, winPos);   // 落點數學在 wheel.js
+  const start = wheelAngle, t0 = performance.now(), dur = 2800 + Math.random() * 1200;
+  (function step(now) {
+    const p = Math.min((now - t0) / dur, 1);
+    wheelAngle = start + totalSpin * easeOutCubic(p);
+    drawWheelNow(rem);
+    if (p < 1) requestAnimationFrame(step);
+    else { wheelAngle = target; drawWheelNow(rem); done(); }
+  })(t0);
+}
+
+// 名字快閃（全班 > WHEEL_MAX 人）：步進速度由 easeOutCubic 決定 → 先快後慢，
+// 最後一步固定是中獎者，所以「畫面上停住的名字」必然等於宣告的名字。
+function flashNames(rem, pickIdx, done) {
+  const el = document.getElementById('flashName');
+  el.classList.remove('idle');
+  const pool = rem.filter(i => i !== pickIdx);
+  const steps = Math.max(24, Math.min(50, rem.length * 2));
+  const seq = [];
+  for (let k = 0; k < steps - 1; k++) seq.push(pool[Math.floor(Math.random() * pool.length)]);
+  seq.push(pickIdx);
+  const t0 = performance.now(), dur = 2600;
+  let shown = -1;
+  (function step(now) {
+    const p = Math.min((now - t0) / dur, 1);
+    const k = Math.min(Math.floor(steps * easeOutCubic(p)), steps - 1);
+    if (k !== shown) { shown = k; el.textContent = cls().students[seq[k]]; }
+    if (p < 1) requestAnimationFrame(step);
+    else { el.textContent = cls().students[pickIdx]; done(); }
+  })(t0);
+}
+
+function finish(idx) {
+  cls().drawn.push(idx);
+  save();
+  drawing = false;
+  setControls(false);
+  showResult(cls().students[idx]);
+}
+
+function showResult(name) {
+  document.getElementById('resultName').textContent = name;
+  document.getElementById('resultLabel').textContent =
+    remaining().length === 0 ? '最後一位' : '抽到的是';
+  document.getElementById('resultOverlay').classList.add('show');
+}
+
+function closeResult() {
+  document.getElementById('resultOverlay').classList.remove('show');
+  renderAll();   // 等結果關掉才更新舞台，免得名字還在畫面上就被抽走
+}
+
+function resetRound() {
+  if (drawing) return;
+  cls().drawn = [];
+  wheelAngle = 0;
+  save(); renderAll();
+}
+
+function putBack(i) {
+  if (drawing) return;
+  cls().drawn = cls().drawn.filter(x => x !== i);
+  save(); renderAll();
+}
+
+// ─── 設定 ───
+function openSettings() {
+  if (drawing) return;
+  editIdx = data.current;
+  renderEditor();
+  document.getElementById('settingsModal').classList.add('show');
+}
+document.getElementById('settingsBtn').addEventListener('click', openSettings);
+
+function renderEditor() {
+  const sel = document.getElementById('editClassSelect');
+  sel.innerHTML = data.classes.map((c, i) =>
+    `<option${i === editIdx ? ' selected' : ''}>${esc(c.name)}</option>`).join('');
+  document.getElementById('className').value = data.classes[editIdx].name;
+  document.getElementById('rosterText').value = data.classes[editIdx].students.join('\n');
+  updateParseCount();
+}
+
+function flushEditor() {   // 把視窗裡的內容寫回 editIdx 這一班
+  const c = data.classes[editIdx];
+  const name = document.getElementById('className').value.trim();
+  const list = parseRoster(document.getElementById('rosterText').value);
+  // 名單變動過就重置這一輪（索引對不上了）
+  const changed = list.length !== c.students.length || list.some((v, i) => v !== c.students[i]);
+  c.name = name || `班級 ${editIdx + 1}`;
+  c.students = list;
+  if (changed) c.drawn = [];
+}
+
+function editSwitch(i) { flushEditor(); editIdx = i; renderEditor(); }
+
+function addClass() {
+  flushEditor();
+  data.classes.push({ name: `班級 ${data.classes.length + 1}`, students: [], drawn: [] });
+  editIdx = data.classes.length - 1;
+  renderEditor();
+}
+
+function removeClass() {
+  if (data.classes.length === 1) { alert('至少要留一個班級'); return; }
+  if (!confirm(`確定要刪掉「${data.classes[editIdx].name}」的名單嗎？`)) return;
+  data.classes.splice(editIdx, 1);
+  editIdx = Math.max(0, editIdx - 1);
+  if (data.current >= data.classes.length) data.current = data.classes.length - 1;
+  renderEditor();
+}
+
+function saveSettings() {
+  flushEditor();
+  data.current = editIdx;
+  wheelAngle = 0;
+  save();
+  document.getElementById('settingsModal').classList.remove('show');
+  renderAll();
+}
+
+document.getElementById('settingsModal').addEventListener('click', e => {
+  if (e.target === document.getElementById('settingsModal')) saveSettings();
+});
+
+function updateParseCount() {
+  const n = parseRoster(document.getElementById('rosterText').value).length;
+  document.getElementById('parseCount').textContent = n ? `— 讀到 ${n} 人` : '';
+}
+document.getElementById('rosterText').addEventListener('input', updateParseCount);
+
+document.getElementById('fileInput').addEventListener('change', e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    document.getElementById('rosterText').value = parseRoster(r.result).join('\n');
+    updateParseCount();
+  };
+  r.readAsText(f, 'UTF-8');
+  e.target.value = '';
+});
+
+function exportRoster() {
+  flushEditor();
+  const c = data.classes[editIdx];
+  if (!c.students.length) { alert('這一班還沒有名單'); return; }
+  const blob = new Blob(['﻿' + c.students.join('\r\n')], { type: 'text/plain;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${c.name}.txt`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+function esc(s) {
+  return String(s).replace(/[&<>"]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[m]));
+}
+
+// 投影幕上課用：空白鍵／Enter 直接抽
+document.addEventListener('keydown', e => {
+  if (e.code !== 'Space' && e.code !== 'Enter') return;
+  if (document.getElementById('settingsModal').classList.contains('show')) return;
+  if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+  e.preventDefault();
+  if (document.getElementById('resultOverlay').classList.contains('show')) closeResult();
+  else draw();
+});
+
+// ─── 啟動 ───
+load();
+renderAll();
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+</script>
+</body>
+</html>

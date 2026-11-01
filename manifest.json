@@ -9,5 +9,9 @@
   "icons": [
     { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
     { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ],
+  "shortcuts": [
+    { "name": "抽學生", "short_name": "抽學生", "url": "./pick.html" },
+    { "name": "抽獎轉盤", "short_name": "抽獎", "url": "./index.html" }
   ]
 }

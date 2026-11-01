@@ -6,6 +6,7 @@
 <meta name="theme-color" content="#1a1a2e">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <link rel="manifest" href="manifest.json">
+<script src="wheel.js"></script>
 <link rel="icon" href="icon-192.png" type="image/png">
 <link rel="apple-touch-icon" href="icon-192.png">
 <title>Lucky Draw</title>
@@ -15,7 +16,7 @@
 body{font-family:-apple-system,BlinkMacSystemFont,"Microsoft JhengHei","Segoe UI",sans-serif;background:var(--bg);color:var(--text);min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;align-items:center;overflow:hidden;-webkit-tap-highlight-color:transparent}
 
 /* Mode toggle */
-.mode-toggle{display:flex;margin-top:16px;border-radius:20px;overflow:hidden;border:2px solid rgba(255,255,255,0.1)}
+.mode-toggle{display:flex;margin-top:56px;border-radius:20px;overflow:hidden;border:2px solid rgba(255,255,255,0.1)}
 .mode-btn{padding:10px 24px;font-size:15px;font-weight:600;border:none;cursor:pointer;font-family:inherit;transition:all .2s}
 .mode-btn.reward{background:transparent;color:var(--reward)}
 .mode-btn.reward.active{background:var(--reward);color:#1a1a2e}
@@ -51,6 +52,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Microsoft JhengHei","Segoe UI
 .result-close.punish{background:var(--punish);color:#fff}
 
 /* Settings */
+.nav-link{position:fixed;top:12px;left:12px;display:flex;align-items:center;gap:6px;color:var(--text-dim);font-size:14px;text-decoration:none;padding:8px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);z-index:50}
+.nav-link:hover{background:rgba(255,255,255,0.06);color:var(--text)}
 .settings-btn{position:fixed;top:12px;right:12px;background:none;border:none;color:var(--text-dim);font-size:22px;cursor:pointer;padding:8px;border-radius:8px;z-index:50}
 .settings-btn:hover{background:rgba(255,255,255,0.06)}
 
@@ -80,6 +83,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Microsoft JhengHei","Segoe UI
 </head>
 <body>
 
+<a class="nav-link" href="pick.html">&#127891; 抽學生</a>
 <button class="settings-btn" id="settingsBtn" title="設定">&#9881;</button>
 
 <div class="mode-toggle">
@@ -188,64 +192,19 @@ function getItems() {
   return currentMode === 'reward' ? rewards : punishes;
 }
 
+const REWARD_COLORS = ['#0f3460', '#16213e', '#1a3a5c', '#132a46', '#1e4070', '#112244'];
+const PUNISH_COLORS = ['#2d1b2e', '#3a1c2e', '#4a1c3e', '#2a1a2a', '#3c2040', '#331a2e'];
+
 function drawWheel() {
-  const canvas = document.getElementById('wheelCanvas');
-  const ctx = canvas.getContext('2d');
-  const items = getItems();
-  const n = items.length;
-  if (n === 0) return;
-
-  const cx = 300, cy = 300, r = 280;
-  const arc = (Math.PI * 2) / n;
-  const colors = currentMode === 'reward'
-    ? ['#0f3460', '#16213e', '#1a3a5c', '#132a46', '#1e4070', '#112244']
-    : ['#2d1b2e', '#3a1c2e', '#4a1c3e', '#2a1a2a', '#3c2040', '#331a2e'];
-
-  ctx.clearRect(0, 0, 600, 600);
-
-  for (let i = 0; i < n; i++) {
-    const startAngle = wheelAngle + i * arc - Math.PI / 2;
-    const endAngle = startAngle + arc;
-
-    // Slice
-    ctx.beginPath();
-    ctx.moveTo(cx, cy);
-    ctx.arc(cx, cy, r, startAngle, endAngle);
-    ctx.closePath();
-    ctx.fillStyle = colors[i % colors.length];
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-
-    // Text
-    ctx.save();
-    ctx.translate(cx, cy);
-    ctx.rotate(startAngle + arc / 2);
-    ctx.textAlign = 'center';
-    ctx.fillStyle = currentMode === 'reward' ? '#4ecdc4' : '#ff6b6b';
-    ctx.font = '24px sans-serif';
-    ctx.fillText(items[i].emoji, r * 0.55, 6);
-    ctx.fillStyle = '#eaeaea';
-    ctx.font = '14px "Microsoft JhengHei", sans-serif';
-    // Wrap long text
-    const txt = items[i].text;
-    if (txt.length > 6) {
-      ctx.font = '12px "Microsoft JhengHei", sans-serif';
-      ctx.fillText(txt.slice(0, 6), r * 0.75, 4);
-      ctx.fillText(txt.slice(6), r * 0.75, 18);
-    } else {
-      ctx.fillText(txt, r * 0.75, 6);
-    }
-    ctx.restore();
-  }
-
-  // Outer ring
-  ctx.beginPath();
-  ctx.arc(cx, cy, r, 0, Math.PI * 2);
-  ctx.strokeStyle = currentMode === 'reward' ? 'rgba(78,205,196,0.3)' : 'rgba(255,107,107,0.3)';
-  ctx.lineWidth = 4;
-  ctx.stroke();
+  const isReward = currentMode === 'reward';
+  renderWheel(document.getElementById('wheelCanvas').getContext('2d'), {
+    items: getItems(),
+    angle: wheelAngle,
+    size: 600, radius: 280,
+    colors: isReward ? REWARD_COLORS : PUNISH_COLORS,
+    emojiColor: isReward ? '#4ecdc4' : '#ff6b6b',
+    ring: isReward ? 'rgba(78,205,196,0.3)' : 'rgba(255,107,107,0.3)',
+  });
 }
 
 // ─── Spin ───
@@ -265,26 +224,13 @@ function spin() {
   setControlsDisabled(true);
 
   const n = items.length;
-  const TAU = Math.PI * 2;
-  const arc = TAU / n;
   // Pick random winner
   const winIdx = Math.floor(Math.random() * n);
-  // drawWheel 把第 i 格的中心畫在 wheelAngle + (i+0.5)*arc - PI/2，
-  // 指針在正上方 (-PI/2)，所以中獎格對準指針的條件是 wheelAngle ≡ -(winIdx+0.5)*arc
-  const target = -(winIdx + 0.5) * arc;
-  const current = ((wheelAngle % TAU) + TAU) % TAU;
-  // 往前轉到目標角度還差多少（0 ~ 2PI），再加「整數圈」——
-  // 圈數必須是整數，否則最終落點會被零點幾圈推掉，顯示框就跟底圖不一致
-  const delta = (((target - current) % TAU) + TAU) % TAU;
-  const totalSpin = (5 + Math.floor(Math.random() * 4)) * TAU + delta;
+  const { target, totalSpin } = planSpin(wheelAngle, n, winIdx);   // 落點數學在 wheel.js
 
   const startAngle = wheelAngle;
   const startTime = performance.now();
   const duration = 3000 + Math.random() * 1500;
-
-  function easeOutCubic(t) {
-    return 1 - Math.pow(1 - t, 3);
-  }
 
   function animate(now) {
     const elapsed = now - startTime;
@@ -298,7 +244,7 @@ function spin() {
       requestAnimationFrame(animate);
     } else {
       // 收尾時把角度歸到目標值本身：既避開累加的浮點誤差，也讓角度不會無限增長
-      wheelAngle = ((target % TAU) + TAU) % TAU;
+      wheelAngle = target;
       drawWheel();
       spinning = false;
       setControlsDisabled(false);

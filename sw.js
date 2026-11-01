@@ -1,5 +1,5 @@
-const CACHE = 'lucky-draw-v2';
-const ASSETS = ['./', 'index.html', 'manifest.json'];
+const CACHE = 'lucky-draw-v3';
+const ASSETS = ['./', 'index.html', 'pick.html', 'wheel.js', 'manifest.json'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)));
